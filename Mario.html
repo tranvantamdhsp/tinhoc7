@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Giáo Dục: Vượt Chướng Ngại Vật</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Be Vietnam Pro', sans-serif;
+            touch-action: manipulation;
+        }
+        canvas {
+            background-color: #87CEEB;
+            border-radius: 0.5rem;
+            border: 2px solid #333;
+        }
+        .nes-btn {
+            position: relative;
+            display: inline-block;
+            padding: 12px 24px;
+            margin: 10px;
+            color: white;
+            background-color: #209CEE;
+            border: 2px solid #143D59;
+            border-radius: 8px;
+            text-transform: uppercase;
+            font-weight: bold;
+            text-shadow: 1px 1px #143D59;
+            box-shadow: 4px 4px 0 #143D59;
+            transition: all 0.1s ease-in-out;
+            cursor: pointer;
+        }
+        .nes-btn:hover {
+            background-color: #1E88E5;
+            box-shadow: 2px 2px 0 #143D59;
+            transform: translate(2px, 2px);
+        }
+        .nes-btn:active {
+            box-shadow: 0 0 0 #143D59;
+            transform: translate(4px, 4px);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <div id="game-container" class="w-full max-w-4xl mx-auto bg-white p-6 rounded-xl shadow-lg">
+
+        <!-- Màn hình bắt đầu -->
+        <div id="start-screen" class="text-center">
+            <h1 class="text-4xl font-bold text-gray-800 mb-4">Vượt Chướng Ngại Vật Trí Tuệ</h1>
+            <p class="text-gray-600 mb-6">Nhập thông tin của bạn và chọn chủ đề để bắt đầu cuộc phiêu lưu!</p>
+            <div class="max-w-md mx-auto">
+                <input id="player-name" type="text" placeholder="Nhập tên của bạn..." class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <input id="player-class" type="text" placeholder="Nhập lớp của bạn..." class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <select id="topic-select" class="w-full p-3 mb-6 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Đang tải chủ đề...</option>
+                </select>
+                <button id="start-button" class="nes-btn">Bắt đầu</button>
+            </div>
+             <p id="loading-message" class="mt-4 text-gray-500 hidden">Đang tải dữ liệu câu hỏi, vui lòng chờ...</p>
+        </div>
+
+        <!-- Màn hình chơi game -->
+        <div id="game-screen" class="hidden">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <span class="font-bold">Người chơi:</span> <span id="display-name"></span> | 
+                    <span class="font-bold">Lớp:</span> <span id="display-class"></span>
+                </div>
+                <div class="text-2xl font-bold text-green-600">
+                    Điểm: <span id="score">0</span>
+                </div>
+            </div>
+            <canvas id="game-canvas"></canvas>
+            <p class="text-center mt-2 text-gray-500">Nhấn chuột hoặc chạm vào màn hình để nhảy</p>
+        </div>
+
+        <!-- Modal câu hỏi -->
+        <div id="question-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4">
+            <div class="bg-white rounded-lg p-8 max-w-2xl w-full">
+                <h2 id="question-text" class="text-2xl font-bold mb-6 text-gray-800">Đây là câu hỏi?</h2>
+                <div id="answer-options" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Các nút đáp án sẽ được chèn vào đây -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Màn hình kết thúc -->
+        <div id="end-screen" class="hidden text-center">
+            <h2 class="text-5xl font-bold text-red-600 mb-4">Kết Thúc!</h2>
+            <p class="text-2xl text-gray-700 mb-2">Điểm cuối cùng của bạn là:</p>
+            <p id="final-score" class="text-6xl font-extrabold text-blue-600 mb-8">0</p>
+            <p id="saving-message" class="text-gray-500 mb-4">Đang lưu kết quả...</p>
+            <button id="restart-button" class="nes-btn">Chơi lại</button>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        // BẠN CHỈ CẦN THAY THẾ URL DƯỚI ĐÂY
+        // URL của Google Apps Script Web App (dùng cho cả lấy câu hỏi và lưu điểm)
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxi8QomtnIP1oOtEIFlCVc3ZaqiTdFS8COx9hX7uhWO-O12lCRxgUiDrBqdwzbJkonU/exec';
+
+        // --- DOM ELEMENTS ---
+        const startScreen = document.getElementById('start-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const endScreen = document.getElementById('end-screen');
+        const questionModal = document.getElementById('question-modal');
+        
+        const playerNameInput = document.getElementById('player-name');
+        const playerClassInput = document.getElementById('player-class');
+        const topicSelect = document.getElementById('topic-select');
+        const startButton = document.getElementById('start-button');
+        const restartButton = document.getElementById('restart-button');
+
+        const displayName = document.getElementById('display-name');
+        const displayClass = document.getElementById('display-class');
+        const scoreDisplay = document.getElementById('score');
+        const finalScoreDisplay = document.getElementById('final-score');
+        
+        const questionText = document.getElementById('question-text');
+        const answerOptionsContainer = document.getElementById('answer-options');
+        const loadingMessage = document.getElementById('loading-message');
+        const savingMessage = document.getElementById('saving-message');
+
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- GAME STATE & VARIABLES ---
+        let player, obstacles, groundY, score, gameSpeed, isGameOver, animationFrameId;
+        let questionsByTopic = {};
+        let currentQuestions = [];
+        let currentObstacle = null;
+        let isPaused = false;
+
+        const GRAVITY = 0.6;
+        const JUMP_FORCE = -12;
+
+        // --- GAME SETUP ---
+        function setupCanvas() {
+            const container = document.getElementById('game-container');
+            canvas.width = container.clientWidth - 20; // Adjust for padding
+            canvas.height = 400;
+            groundY = canvas.height - 50;
+        }
+
+        function initPlayer() {
+            return {
+                x: 50,
+                y: groundY,
+                width: 40,
+                height: 40,
+                velocityY: 0,
+                isJumping: false,
+                draw() {
+                    ctx.fillStyle = '#FFD700'; // Gold color
+                    ctx.fillRect(this.x, this.y - this.height, this.width, this.height);
+                    // Simple face
+                    ctx.fillStyle = 'black';
+                    ctx.fillRect(this.x + 25, this.y - this.height + 10, 5, 5); // Eye
+                    ctx.beginPath();
+                    ctx.arc(this.x + 20, this.y - this.height + 25, 10, 0, Math.PI, false); // Smile
+                    ctx.stroke();
+                },
+                update() {
+                    if (this.isJumping) {
+                        this.velocityY += GRAVITY;
+                        this.y += this.velocityY;
+                    }
+                    if (this.y > groundY) {
+                        this.y = groundY;
+                        this.velocityY = 0;
+                        this.isJumping = false;
+                    }
+                },
+                jump() {
+                    if (!this.isJumping) {
+                        this.velocityY = JUMP_FORCE;
+                        this.isJumping = true;
+                    }
+                }
+            };
+        }
+
+        function createObstacle() {
+            const size = Math.random() * 30 + 30; // Random size
+            return {
+                x: canvas.width,
+                y: groundY - size,
+                width: 30,
+                height: size,
+                draw() {
+                    ctx.fillStyle = '#C04000'; // Mahogany color
+                    ctx.fillRect(this.x, this.y, this.width, this.height);
+                }
+            };
+        }
+
+        // --- DATA HANDLING ---
+        async function fetchAndParseQuestions() {
+            if (APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL') {
+                alert('LỖI: Vui lòng cấu hình URL của Google Apps Script trong file script.');
+                return;
+            }
+            loadingMessage.classList.remove('hidden');
+            startButton.disabled = true;
+            try {
+                // Lấy dữ liệu câu hỏi trực tiếp từ Apps Script (yêu cầu GET)
+                const response = await fetch(APPS_SCRIPT_URL);
+                if (!response.ok) {
+                    throw new Error(`Lỗi mạng! Trạng thái: ${response.status}`);
+                }
+                const data = await response.json();
+                
+                if (data.status === 'error') {
+                     throw new Error(`Lỗi từ Apps Script: ${data.message}`);
+                }
+
+                questionsByTopic = data;
+                populateTopicSelect();
+
+            } catch (error) {
+                console.error('Lỗi khi tải câu hỏi:', error);
+                alert('Không thể tải dữ liệu câu hỏi. Vui lòng kiểm tra lại URL và cài đặt Google Apps Script.');
+            } finally {
+                loadingMessage.classList.add('hidden');
+                startButton.disabled = false;
+            }
+        }
+
+        function populateTopicSelect() {
+            topicSelect.innerHTML = '<option value="" disabled selected>-- Chọn một chủ đề --</option>';
+            for (const topic in questionsByTopic) {
+                const option = document.createElement('option');
+                option.value = topic;
+                option.textContent = topic;
+                topicSelect.appendChild(option);
+            }
+        }
+
+        // --- GAME LOGIC ---
+        function startGame() {
+            const playerName = playerNameInput.value.trim();
+            const playerClass = playerClassInput.value.trim();
+            const selectedTopic = topicSelect.value;
+
+            if (!playerName || !playerClass) {
+                alert('Vui lòng nhập tên và lớp của bạn.');
+                return;
+            }
+            if (!selectedTopic) {
+                alert('Vui lòng chọn một chủ đề.');
+                return;
+            }
+
+            displayName.textContent = playerName;
+            displayClass.textContent = playerClass;
+            // Lấy câu hỏi từ chủ đề đã chọn
+            currentQuestions = [...questionsByTopic[selectedTopic]];
+
+            startScreen.classList.add('hidden');
+            endScreen.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+
+            resetGame();
+            gameLoop();
+        }
+
+        function resetGame() {
+            setupCanvas();
+            player = initPlayer();
+            obstacles = [createObstacle()];
+            score = 0;
+            gameSpeed = 4;
+            isGameOver = false;
+            isPaused = false;
+            scoreDisplay.textContent = score;
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+        }
+
+        function gameLoop() {
+            if (isGameOver || isPaused) return;
+
+            animationFrameId = requestAnimationFrame(gameLoop);
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw ground
+            ctx.fillStyle = '#228B22'; // ForestGreen
+            ctx.fillRect(0, groundY, canvas.width, 50);
+
+            player.update();
+            player.draw();
+
+            // Handle obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obs = obstacles[i];
+                obs.x -= gameSpeed;
+                obs.draw();
+
+                // Collision detection
+                if (
+                    player.x < obs.x + obs.width &&
+                    player.x + player.width > obs.x &&
+                    player.y - player.height < obs.y + obs.height &&
+                    player.y > obs.y
+                ) {
+                    handleCollision(obs);
+                }
+
+                // Remove off-screen obstacles
+                if (obs.x + obs.width < 0) {
+                    obstacles.splice(i, 1);
+                }
+            }
+
+            // Add new obstacles
+            if (obstacles.length === 0 || obstacles[obstacles.length - 1].x < canvas.width - 300 - Math.random() * 200) {
+                obstacles.push(createObstacle());
+            }
+
+            // Increase speed over time
+            gameSpeed += 0.001;
+        }
+        
+        function handleCollision(obstacle) {
+            isPaused = true;
+            currentObstacle = obstacle;
+            showQuestion();
+        }
+
+        function showQuestion() {
+            if (currentQuestions.length === 0) {
+                alert("Chúc mừng! Bạn đã trả lời hết câu hỏi của chủ đề này!");
+                endGame();
+                return;
+            }
+
+            const questionIndex = Math.floor(Math.random() * currentQuestions.length);
+            const q = currentQuestions.splice(questionIndex, 1)[0]; 
+
+            questionText.textContent = q.question;
+            answerOptionsContainer.innerHTML = '';
+
+            q.options.forEach((option, index) => {
+                const button = document.createElement('button');
+                button.textContent = option;
+                button.className = 'nes-btn is-primary w-full text-left p-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg';
+                button.onclick = () => checkAnswer(index === q.correctAnswerIndex);
+                answerOptionsContainer.appendChild(button);
+            });
+
+            questionModal.classList.remove('hidden');
+        }
+
+        function checkAnswer(isCorrect) {
+            questionModal.classList.add('hidden');
+
+            if (isCorrect) {
+                score += 10;
+                scoreDisplay.textContent = score;
+                const index = obstacles.indexOf(currentObstacle);
+                if (index > -1) {
+                    obstacles.splice(index, 1);
+                }
+                currentObstacle = null;
+                isPaused = false;
+                gameLoop(); // Resume game
+            } else {
+                endGame();
+            }
+        }
+
+        function endGame() {
+            isGameOver = true;
+            cancelAnimationFrame(animationFrameId);
+            gameScreen.classList.add('hidden');
+            endScreen.classList.remove('hidden');
+            finalScoreDisplay.textContent = score;
+            saveScore();
+        }
+        
+        async function saveScore() {
+            if (APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL') {
+                savingMessage.textContent = 'Lưu điểm thất bại: Chưa cấu hình URL.';
+                return;
+            }
+            
+            const data = {
+                name: playerNameInput.value.trim(),
+                class: playerClassInput.value.trim(),
+                score: score,
+            };
+
+            try {
+                // Gửi yêu cầu POST để lưu điểm
+                await fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', 
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                savingMessage.textContent = 'Đã lưu kết quả thành công!';
+            } catch (error) {
+                console.error('Lỗi khi lưu điểm:', error);
+                savingMessage.textContent = 'Lưu điểm thất bại. Vui lòng kiểm tra lại kết nối.';
+            }
+        }
+
+        // --- EVENT LISTENERS ---
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', () => {
+            endScreen.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+        });
+
+        // Jump controls
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !isGameOver && !isPaused) player.jump();
+        });
+        canvas.addEventListener('mousedown', () => {
+            if (!isGameOver && !isPaused) player.jump();
+        });
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (!isGameOver && !isPaused) player.jump();
+        });
+        
+        window.addEventListener('resize', setupCanvas);
+
+        // --- INITIALIZATION ---
+        fetchAndParseQuestions();
+    </script>
+</body>
+</html>
